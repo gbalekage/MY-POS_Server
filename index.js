@@ -7,6 +7,7 @@ const upload = require("express-fileupload");
 // import files
 const userRoutes = require("./routes/user");
 const { notFound, errorHandler } = require("./middlewares/error");
+const categoryRoutes = require("./routes/category");
 
 const port = process.env.PORT || 3000;
 
@@ -20,6 +21,7 @@ app.use("/uploads", express.static(__dirname + "uploads"));
 
 // routes
 app.use("/api/users", userRoutes);
+app.use("/api/categories", categoryRoutes);
 
 //error handling
 app.use(notFound);
