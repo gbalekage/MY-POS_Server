@@ -8,7 +8,8 @@ const upload = require("express-fileupload");
 const userRoutes = require("./routes/user");
 const { notFound, errorHandler } = require("./middlewares/error");
 const categoryRoutes = require("./routes/category");
-const printerRoutes = require("./routes/printer")
+const printerRoutes = require("./routes/printer");
+const storeRoutes = require("./routes/store");
 
 const port = process.env.PORT || 3000;
 
@@ -23,7 +24,8 @@ app.use("/uploads", express.static(__dirname + "uploads"));
 // routes
 app.use("/api/users", userRoutes);
 app.use("/api/categories", categoryRoutes);
-app.use("/api/printers", printerRoutes)
+app.use("/api/printers", printerRoutes);
+app.use("/api/stores", storeRoutes);
 
 //error handling
 app.use(notFound);
