@@ -13,8 +13,8 @@ const {
 const router = Router();
 
 router.post("/add-printer", auth, admin, addPrinter);
-router.get("/:id", getPrinterById);
 router.get("/", getPrinters);
+router.get("/:id", getPrinterById);
 router.put("/edit/:id", auth, admin, updatePrinter);
 router.delete("/delete/:id", auth, admin, deletePrinter);
 router.post("/test", auth, admin, testPrinter);

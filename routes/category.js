@@ -15,6 +15,6 @@ router.post("/add-category", auth, admin, addCategory);
 router.get("/", auth, getCategories);
 router.get("/:id", auth, getCategoryById);
 router.put("/edit/:id", auth, admin, updateCategory);
-router.delete("/category/:id", auth, admin, deleteCategory);
+router.delete("/delete/:id", auth, admin, deleteCategory);
 
 module.exports = router;

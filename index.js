@@ -10,6 +10,7 @@ const { notFound, errorHandler } = require("./middlewares/error");
 const categoryRoutes = require("./routes/category");
 const printerRoutes = require("./routes/printer");
 const storeRoutes = require("./routes/store");
+const supplierRoutes = require("./routes/supplier");
 
 const port = process.env.PORT || 3000;
 
@@ -26,6 +27,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/printers", printerRoutes);
 app.use("/api/stores", storeRoutes);
+app.use("/api/suppliers", supplierRoutes);
 
 //error handling
 app.use(notFound);

@@ -205,7 +205,16 @@ const avatar = async (req, res, next) => {
 
         const updatedAvatar = await User.findByIdAndUpdate(
           req.user.id,
-          { avatar: newFilename },
+          {
+            avatar: newFilename,
+            $push: {
+              activityLogs: {
+                action: "Avatar Updated",
+                description: "User updated their avatar",
+                createdAt: new Date(),
+              },
+            },
+          },
           { new: true }
         );
 
@@ -329,7 +338,7 @@ const deleteUser = async (req, res, next) => {
   } catch (error) {
     console.error("Error deleting user:", error);
     return next(
-      new Errors(
+      new HttpError(
         `Erreur lors de la suppression de l'utilisateur: ${error.message}`,
         500
       )

@@ -48,18 +48,16 @@ const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
-    if (!name) {
-      return next(new HttpError("Please provide a category name", 400));
-    }
-    const category = await Category.findByIdAndUpdate(
-      id,
-      { name },
-      { new: true }
-    );
+
+    const category = await Category.findByIdAndUpdate(id);
     if (!category) {
       return next(new HttpError("Failed to update the category", 400));
     }
-    res.status(200).json(category);
+
+    if (name) category.name = name;
+    const updatedCategory = await category.save();
+
+    res.status(200).json(updatedCategory);
   } catch (error) {
     return next(new HttpError("Failed to update the category", 500));
   }
