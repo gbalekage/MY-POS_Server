@@ -88,7 +88,7 @@ const deletePrinter = async (req, res, next) => {
 const testPrinter = async (req, res, next) => {
   try {
     const { ipAddress, name } = req.body;
-    if (!ipAddress) {
+    if (!ipAddress || !name) {
       return next(new HttpError("Fill in all fields", 422));
     }
 
@@ -107,8 +107,18 @@ const testPrinter = async (req, res, next) => {
 
     printer.alignCenter();
     printer.bold(true);
-    printer.println("Test Print", name);
+    printer.println("TEST PRINT");
+    printer.newLine();
+
     printer.bold(false);
+    printer.println("================================");
+
+    printer.bold(true);
+    printer.println(`IMPRIMANTE: ${name}`);
+
+    printer.bold(false);
+    printer.println("================================");
+
     printer.newLine();
     printer.cut();
 
@@ -129,5 +139,5 @@ module.exports = {
   getPrinterById,
   updatePrinter,
   deletePrinter,
-  testPrinter
+  testPrinter,
 };
