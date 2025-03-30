@@ -17,6 +17,6 @@ router.get("/", getPrinters);
 router.get("/:id", getPrinterById);
 router.put("/edit/:id", auth, admin, updatePrinter);
 router.delete("/delete/:id", auth, admin, deletePrinter);
-router.post("/test", auth, admin, testPrinter);
+router.post("/test", testPrinter);
 
 module.exports = router;
