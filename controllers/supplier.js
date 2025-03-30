@@ -7,7 +7,13 @@ const addSupplier = async (req, res, next) => {
     if (!name || !email || !phone || !contactPerson || !address) {
       return next(new HttpError("All fields are required", 400));
     }
-    const supplier = new Supplier({ name, email, phone });
+    const supplier = new Supplier({
+      name,
+      email,
+      phone,
+      contactPerson,
+      address,
+    });
     await supplier.save();
     res.status(201).json(supplier);
   } catch (error) {
