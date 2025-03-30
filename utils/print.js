@@ -3,6 +3,10 @@ const Types = require("node-thermal-printer").types;
 const User = require("../models/user");
 const HttpError = require("../models/error");
 const Order = require("../models/order");
+const Item = require("../models/item");
+const Store = require("../models/store");
+const Table = require("../models/table");
+
 
 const printOrder = async (order) => {
   try {
@@ -92,4 +96,77 @@ const printOrder = async (order) => {
   }
 };
 
-module.exports = printOrder;
+const printNewItems = async (orderId, newItems) => {
+  try {
+    const order = await Order.findById(orderId).populate("table");
+    if (!order) {
+      console.error("Commande non trouvée");
+      return;
+    }
+
+    const storePrinters = {}; // Stocker les imprimantes par magasin
+
+    for (const item of newItems) {
+      const product = await Item.findById(item.product).populate("store");
+      if (!product || !product.store) {
+        console.error("Produit ou magasin non trouvé");
+        continue;
+      }
+
+      const store = await Store.findById(product.store._id).populate("printer");
+      if (!store || !store.printer) {
+        console.error(
+          `Aucune imprimante assignée au magasin : ${product.store.name}`
+        );
+        continue;
+      }
+
+      const printerIp = store.printer.ipAddress;
+      if (!storePrinters[printerIp]) {
+        storePrinters[printerIp] = {
+          printer: new ThermalPrinter({
+            type: Types.EPSON, // ou STAR selon ton imprimante
+            interface: `tcp://${printerIp}:9100`,
+            removeSpecialCharacters: false,
+            lineCharacter: "-",
+            width: 42,
+          }),
+          items: [],
+        };
+      }
+
+      storePrinters[printerIp].items.push({
+        name: product.name,
+        quantity: item.quantity,
+      });
+    }
+
+    // Impression pour chaque imprimante
+    for (const [printerIp, data] of Object.entries(storePrinters)) {
+      const { printer, items } = data;
+
+      printer.alignCenter();
+      printer.bold(true);
+      printer.println("RESTAURANT/BAR");
+      printer.println("NOUVEAUX ARTICLES");
+      printer.bold(false);
+      printer.println(`Commande #${order._id.toString().slice(-6)}`);
+      printer.println(`Table: ${order.table.toString().slice(-4)}`);
+      printer.drawLine();
+
+      items.forEach((item, index) => {
+        printer.println(`${index + 1}. ${item.name} x${item.quantity}`);
+      });
+      printer.cut();
+
+      const success = await printer.execute();
+      if (!success) {
+        console.error(`Erreur d'impression sur l'imprimante ${printerIp}`);
+      }
+    }
+  } catch (error) {
+    console.error("Erreur lors de l'impression :", error);
+  }
+};
+
+module.exports = { printOrder, printNewItems };
