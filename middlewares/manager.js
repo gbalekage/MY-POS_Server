@@ -1,6 +1,6 @@
 const HttpError = require("../models/error");
 
-const admin = (req, res, next) => {
+const manager = (req, res, next) => {
   if (!req.user) {
     return next(new HttpError("Utilisateur non authentifié.", 401));
   }
@@ -16,4 +16,4 @@ const admin = (req, res, next) => {
   next();
 };
 
-module.exports = admin;
+module.exports = manager;

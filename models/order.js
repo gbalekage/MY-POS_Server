@@ -22,6 +22,12 @@ const orderSchema = new mongoose.Schema(
         quantity: { type: Number, require: true },
       },
     ],
+    removedItems: [
+      {
+        product: { type: mongoose.Schema.Types.ObjectId, ref: "Item" },
+        quantity: { type: Number, required: true },
+      },
+    ],
     status: {
       type: String,
       enum: ["pending", "bill-printed", "paid"],

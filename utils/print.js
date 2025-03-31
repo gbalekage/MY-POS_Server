@@ -5,168 +5,152 @@ const HttpError = require("../models/error");
 const Order = require("../models/order");
 const Item = require("../models/item");
 const Store = require("../models/store");
-const Table = require("../models/table");
 
-
-const printOrder = async (order) => {
+async function printItemsForStore(storeId, items, order, attendantName) {
   try {
-    const populatedOrder = await Order.findById(order._id)
-      .populate({
-        path: "items.product",
-        populate: { path: "store", populate: { path: "printer" } },
-      })
-      .populate("table");
-
-    if (!populatedOrder) {
-      console.error("Commande non trouvée !");
+    const store = await Store.findById(storeId).populate("printer");
+    if (!store || !store.printer) {
+      console.error(`Aucune imprimante définie pour le store: ${storeId}`);
       return;
     }
 
-    const attendant = await User.findById(populatedOrder.attendant).select(
-      "name"
-    );
-    const formattedDate = new Date(populatedOrder.createdAt).toLocaleString(
-      "fr-FR"
-    );
+    console.log("User", attendantName);
 
-    const printJobs = {};
+    const printerIP = store.printer.ipAddress;
+    if (!printerIP) {
+      console.error(
+        `Aucune adresse IP trouvée pour l'imprimante du store: ${storeId}`
+      );
+      return;
+    }
 
-    populatedOrder.items.forEach((item) => {
-      const store = item.product.store;
-      const printer = store?.printer;
-
-      if (!printer || !printer.ipAddress) {
-        console.error(
-          `Aucune imprimante assignée pour le magasin ${store?.name}`
-        );
-        return;
-      }
-
-      if (!printJobs[printer.ipAddress]) {
-        printJobs[printer.ipAddress] = [];
-      }
-
-      printJobs[printer.ipAddress].push({
-        name: item.product.name,
-        quantity: item.quantity,
-        store: store.name,
-      });
+    const printer = new ThermalPrinter({
+      type: Types.EPSON,
+      interface: `tcp://${printerIP}:9100`,
     });
 
-    // Envoyer chaque lot d'articles à son imprimante
-    for (const ip in printJobs) {
-      const printer = new ThermalPrinter({
-        type: Types.EPSON, // ou STAR selon votre imprimante
-        interface: `tcp://${ip}:9100`,
-        removeSpecialCharacters: false,
-        lineCharacter: "-",
-        width: 42,
-      });
-
-      printer.bold(true);
-      printer.println("RESTAURANT/BAR");
-      printer.println("Commande: " + populatedOrder._id.toString().slice(-6));
-      printer.bold(false);
-      printer.println("Date : " + formattedDate);
-      printer.newLine();
-
-      printer.println("Serveur: " + (attendant ? attendant.name : "Inconnu"));
-      printer.drawLine();
-
-      printer.bold(true);
-      printer.println("Articles :");
-
-      printJobs[ip].forEach((item, index) => {
-        printer.println(`${item.name} x${item.quantity}`);
-      });
-
-      printer.drawLine();
-      printer.newLine();
-
-      printer.println("Merci pour votre visite !");
-      printer.cut();
-
-      const success = await printer.execute();
-      if (!success) {
-        console.error(`Erreur d'impression sur ${ip} !`);
-      }
-    }
-  } catch (error) {
-    console.error("Erreur lors de l'impression :", error);
-  }
-};
-
-const printNewItems = async (orderId, newItems) => {
-  try {
-    const order = await Order.findById(orderId).populate("table");
-    if (!order) {
-      console.error("Commande non trouvée");
+    let isConnected = await printer.isPrinterConnected();
+    if (!isConnected) {
+      console.error(`Imprimante ${store.name} non connectée !`);
       return;
     }
 
-    const storePrinters = {}; // Stocker les imprimantes par magasin
+    printer.alignCenter();
+    printer.bold(true);
+    printer.println(`🛒 ${store.name.toUpperCase()} STORE 🛒`);
+    printer.bold(false);
+    printer.drawLine();
+    printer.println(`Serveur: ${attendantName}`);
+    printer.drawLine();
 
-    for (const item of newItems) {
-      const product = await Item.findById(item.product).populate("store");
-      if (!product || !product.store) {
-        console.error("Produit ou magasin non trouvé");
-        continue;
-      }
+    printer.alignLeft();
+    items.forEach((item) => {
+      printer.println(`${item.quantity}x ${item.productName}`);
+    });
 
-      const store = await Store.findById(product.store._id).populate("printer");
-      if (!store || !store.printer) {
-        console.error(
-          `Aucune imprimante assignée au magasin : ${product.store.name}`
-        );
-        continue;
-      }
+    printer.drawLine();
+    printer.cut();
 
-      const printerIp = store.printer.ipAddress;
-      if (!storePrinters[printerIp]) {
-        storePrinters[printerIp] = {
-          printer: new ThermalPrinter({
-            type: Types.EPSON, // ou STAR selon ton imprimante
-            interface: `tcp://${printerIp}:9100`,
-            removeSpecialCharacters: false,
-            lineCharacter: "-",
-            width: 42,
-          }),
-          items: [],
-        };
-      }
-
-      storePrinters[printerIp].items.push({
-        name: product.name,
-        quantity: item.quantity,
-      });
-    }
-
-    // Impression pour chaque imprimante
-    for (const [printerIp, data] of Object.entries(storePrinters)) {
-      const { printer, items } = data;
-
-      printer.alignCenter();
-      printer.bold(true);
-      printer.println("RESTAURANT/BAR");
-      printer.println("NOUVEAUX ARTICLES");
-      printer.bold(false);
-      printer.println(`Commande #${order._id.toString().slice(-6)}`);
-      printer.println(`Table: ${order.table.toString().slice(-4)}`);
-      printer.drawLine();
-
-      items.forEach((item, index) => {
-        printer.println(`${index + 1}. ${item.name} x${item.quantity}`);
-      });
-      printer.cut();
-
-      const success = await printer.execute();
-      if (!success) {
-        console.error(`Erreur d'impression sur l'imprimante ${printerIp}`);
-      }
-    }
+    await printer.execute();
   } catch (error) {
-    console.error("Erreur lors de l'impression :", error);
+    console.error(
+      `Erreur d'impression pour le store ${storeId}: ${error.message}`
+    );
   }
-};
+}
 
-module.exports = { printOrder, printNewItems };
+async function printOrder(order, attendantName) {
+  const storeItems = {};
+
+  for (let item of order.items) {
+    const product = await Item.findById(item.product).populate("store");
+    if (!product || !product.store) continue;
+
+    const storeId = product.store._id.toString();
+    if (!storeItems[storeId]) {
+      storeItems[storeId] = [];
+    }
+
+    storeItems[storeId].push({
+      quantity: item.quantity,
+      productName: product.name,
+    });
+  }
+
+  for (const [storeId, items] of Object.entries(storeItems)) {
+    await printItemsForStore(storeId, items, order, attendantName);
+  }
+}
+
+async function printRemovedItemsForStore(storeId, removedItems, attendantName) {
+  try {
+    const store = await Store.findById(storeId).populate("printer");
+    if (!store || !store.printer) {
+      console.error(`Aucune imprimante définie pour le store: ${storeId}`);
+      return;
+    }
+
+    const printerIP = store.printer.ipAddress;
+    if (!printerIP) {
+      console.error(
+        `Aucune adresse IP trouvée pour l'imprimante du store: ${storeId}`
+      );
+      return;
+    }
+
+    const printer = new ThermalPrinter({
+      type: Types.EPSON,
+      interface: `tcp://${printerIP}:9100`,
+    });
+
+    let isConnected = await printer.isPrinterConnected();
+    if (!isConnected) {
+      console.error(`Imprimante ${store.name} non connectée !`);
+      return;
+    }
+
+    printer.alignCenter();
+    printer.bold(true);
+    printer.println(
+      `🛒 ${store.name.toUpperCase()} STORE (ARTICLE RETIRES) 🛒`
+    );
+
+    printer.alignLeft();
+    removedItems.forEach((item) => {
+      printer.println(`${item.quantity}x ${item.productName}`);
+    });
+
+    printer.drawLine();
+    printer.cut();
+
+    await printer.execute();
+  } catch (error) {
+    console.error(
+      `Erreur d'impression des articles retirés pour le store ${storeId}: ${error.message}`
+    );
+  }
+}
+
+async function printRemovedItems(order, attendantName) {
+  const removedItemsByStore = {};
+  for (const removedItem of order.removedItems) {
+    const product = await Item.findById(removedItem.product).populate("store");
+    if (!product || !product.store) continue;
+
+    const storeId = product.store._id.toString();
+    if (!removedItemsByStore[storeId]) {
+      removedItemsByStore[storeId] = [];
+    }
+
+    removedItemsByStore[storeId].push({
+      quantity: removedItem.quantity,
+      productName: product.name,
+    });
+  }
+
+  for (const [storeId, removed] of Object.entries(removedItemsByStore)) {
+    await printRemovedItemsForStore(storeId, removed, attendantName);
+  }
+}
+
+module.exports = { printOrder, printRemovedItems };
