@@ -5,6 +5,9 @@ const HttpError = require("../models/error");
 const Order = require("../models/order");
 const Item = require("../models/item");
 const Store = require("../models/store");
+const Company = require("../models/category");
+
+const PRINTER_IP = "192.168.1.87"; // Adresse fixe de l'imprimante
 
 async function printItemsForStore(storeId, items, order, attendantName) {
   try {
@@ -153,4 +156,48 @@ async function printRemovedItems(order, attendantName) {
   }
 }
 
-module.exports = { printOrder, printRemovedItems };
+const printInvoice = async (order) => {
+  try {
+    const company = await Company.findOne(); // Fetch company details
+    if (!company) {
+      console.error("Aucune information sur l'entreprise trouvée.");
+      return false;
+    }
+
+    const printer = new ThermalPrinter({
+      type: Types.EPSON,
+      interface: `tcp://${printerIP}:9100`, // Add your printer's IP
+    });
+
+    // Print company logo (if available)
+    if (company.logo) {
+      printer.println(`Logo: ${company.logo}`);
+    }
+
+    // Print company information
+    printer.alignCenter();
+    printer.bold(true);
+    printer.println(company.name);
+    printer.bold(false);
+    printer.println(company.address);
+    printer.drawLine();
+
+    // Print order details (e.g., items, total price, etc.)
+    printer.alignLeft();
+    order.items.forEach((item) => {
+      printer.println(`${item.quantity}x ${item.product.name}`);
+    });
+
+    printer.drawLine();
+    printer.println(`Total: ${order.totalPrice} USD`);
+    printer.cut();
+    await printer.execute();
+
+    return true;
+  } catch (error) {
+    console.error("Erreur lors de l'impression de la facture:", error);
+    return false;
+  }
+};
+
+module.exports = { printOrder, printRemovedItems, printInvoice };

@@ -9,14 +9,15 @@ const {
   deletePrinter,
   testPrinter,
 } = require("../controllers/printer");
+const manager = require("../middlewares/manager");
 
 const router = Router();
 
-router.post("/add-printer", auth, admin, addPrinter);
+router.post("/add-printer", auth, admin, manager, addPrinter);
 router.get("/", getPrinters);
 router.get("/:id", getPrinterById);
 router.put("/edit/:id", auth, admin, updatePrinter);
 router.delete("/delete/:id", auth, admin, deletePrinter);
-router.post("/test", testPrinter);
+router.post("/test", auth, admin, testPrinter);
 
 module.exports = router;

@@ -14,6 +14,7 @@ const supplierRoutes = require("./routes/supplier");
 const itemRoutes = require("./routes/item");
 const tableRoutes = require("./routes/table");
 const orderRoutes = require("./routes/order");
+const companyRoutes = require("./routes/company");
 
 const port = process.env.PORT || 3000;
 
@@ -32,8 +33,9 @@ app.use("/api/printers", printerRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/items", itemRoutes);
-app.use('/api/tables', tableRoutes)
-app.use("/api/orders", orderRoutes)
+app.use("/api/tables", tableRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/companies", companyRoutes);
 
 //error handling
 app.use(notFound);

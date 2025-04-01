@@ -254,7 +254,7 @@ const editUser = async (req, res, next) => {
 
     // Vérification si l'utilisateur est supprimé
     if (user.isDeleted) {
-      return next(new HttpError("Cet utilisateur a été supprimé", 410));
+      return next(new HttpError("Cet utilisateur a été supprimé", 422));
     }
 
     // Mise à jour du mot de passe si fourni

@@ -3,7 +3,11 @@ const Item = require("../models/item");
 const User = require("../models/user");
 const Table = require("../models/table");
 const HttpError = require("../models/error");
-const { printOrder, printRemovedItems } = require("../utils/print");
+const {
+  printOrder,
+  printRemovedItems,
+  printInvoice,
+} = require("../utils/print");
 
 const createOrder = async (req, res, next) => {
   try {
@@ -266,4 +270,55 @@ const removeItemFromOrder = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, addItemToOrder, removeItemFromOrder };
+const facture = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId)
+      .populate("items.product")
+      .populate("attendant");
+
+    if (!order) {
+      return res.status(404).json({ error: "Commande introuvable." });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable." });
+    }
+    let printLimit = 0;
+
+    if (user.role === "attendant") {
+      printLimit = 1;
+    } else if (user.role === "cashier") {
+      printLimit = 1;
+    } else if (user.role === "manager") {
+      printLimit = 2;
+    } else if (user.role === "admin") {
+      printLimit = 4;
+    }
+
+    if (user.billPrintCount >= printLimit) {
+      return res.status(403).json({
+        error: `Vous avez atteint votre limite de ${printLimit} impression(s) de facture.`,
+      });
+    }
+
+    const success = await printInvoice(order);
+    if (!success) {
+      return res.status(500).json({ error: "Erreur d'impression." });
+    }
+
+    user.billPrintCount += 1;
+    await user.save();
+
+    order.status = "bill-printed";
+    await order.save();
+
+    res.status(200).json({ message: "Facture imprimée avec succès." });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur serveur", details: error.message });
+  }
+};
+
+module.exports = { createOrder, addItemToOrder, removeItemFromOrder, facture };

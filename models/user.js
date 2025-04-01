@@ -45,7 +45,8 @@ const userSchema = new Schema(
         date: { type: Date, default: Date.now },
       },
     ],
-    isDeleted: {type: Boolean, default: false}
+    isDeleted: { type: Boolean, default: false },
+    billPrintCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
