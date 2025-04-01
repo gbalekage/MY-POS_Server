@@ -3,10 +3,12 @@ const Item = require("../models/item");
 const User = require("../models/user");
 const Table = require("../models/table");
 const HttpError = require("../models/error");
+const ClosedBill = require("../models/closedBills");
 const {
   printOrder,
   printRemovedItems,
   printInvoice,
+  printReceipt,
 } = require("../utils/print");
 
 const createOrder = async (req, res, next) => {
@@ -381,10 +383,113 @@ const applyDiscount = async (req, res) => {
   }
 };
 
+const payOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentMethod, amountReceived } = req.body;
+
+    const validPaymentMethods = ["cash", "mobile money", "bank payment"];
+    if (!validPaymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({ error: "Invalid payment method" });
+    }
+
+    const order = await Order.findById(orderId).populate({
+      path: "items.product",
+      select: "name sellingPrice",
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.status === "paid") {
+      return res.status(400).json({ error: "Order has already been paid" });
+    }
+
+    const totalPrice = order.totalPrice;
+    if (amountReceived < totalPrice) {
+      return res.status(400).json({
+        error: "Insufficient amount received",
+        totalPrice: totalPrice,
+      });
+    }
+
+    const change = amountReceived - totalPrice;
+
+    order.status = "pending";
+    await order.save();
+
+    // Add product name and price to the items
+    const itemsWithPrices = await Promise.all(
+      order.items.map(async (item) => {
+        return {
+          ...item.toObject(),
+          price: item.product.sellingPrice,
+          name: item.product.name, // Add the product name here
+        };
+      })
+    );
+
+    const closedBill = new ClosedBill({
+      order: order._id,
+      totalPrice: totalPrice,
+      paymentMethod,
+      amountReceived,
+      change,
+      items: itemsWithPrices,
+      cashier: req.user._id,
+    });
+
+    await closedBill.save();
+
+    const populatedClosedBill = await ClosedBill.findById(closedBill._id)
+      .populate({
+        path: "items.product",
+        select: "name sellingPrice",
+      })
+      .populate({
+        path: "cashier",
+        select: "name",
+      });
+
+    const table = await Table.findOne({ order: order._id });
+
+    if (table) {
+      const attendantId = table.attendent;
+
+      table.status = "disponible";
+      table.order = null;
+      table.attendent = null;
+      await table.save();
+
+      if (attendantId) {
+        await User.findByIdAndUpdate(
+          attendantId,
+          { $pull: { assignedTables: table._id } }, // Remove the table from the assignedTables array
+          { new: true }
+        );
+      }
+    }
+
+    await Order.findByIdAndDelete(orderId);
+
+    await printReceipt(populatedClosedBill);
+
+    return res.status(200).json({
+      message: "Order marked as paid successfully",
+      closedBill: populatedClosedBill,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   createOrder,
   addItemToOrder,
   removeItemFromOrder,
   facture,
   applyDiscount,
+  payOrder,
 };

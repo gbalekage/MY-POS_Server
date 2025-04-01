@@ -6,6 +6,7 @@ const Order = require("../models/order");
 const Item = require("../models/item");
 const Store = require("../models/store");
 const Company = require("../models/company");
+const Printer = require("../models/printer");
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
@@ -254,4 +255,113 @@ const printInvoice = async (order) => {
   }
 };
 
-module.exports = { printOrder, printRemovedItems, printInvoice };
+const printReceipt = async (populatedClosedBill) => {
+  try {
+    const company = await Company.findOne();
+    if (!company) {
+      console.error("Aucune information sur l'entreprise trouvée.");
+      return false;
+    }
+
+    const printerName = "Bar Printer";
+
+    const IP = await Printer.findOne({ name: printerName });
+
+    const ipAddress = IP.ipAddress;
+
+    const printer = new ThermalPrinter({
+      type: Types.EPSON,
+      interface: `tcp://${ipAddress}:9100`,
+    });
+
+    if (company.logo) {
+      const logoPath = path.join(
+        __dirname,
+        "../uploads/logos/",
+        path.basename(company.logo)
+      );
+      console.log("Chemin du logo:", logoPath);
+
+      if (fs.existsSync(logoPath)) {
+        console.log("Logo trouvé, redimensionnement...");
+
+        const resizedLogoPath = path.join(
+          __dirname,
+          "../uploads/logos/resized-logo.png"
+        );
+        await sharp(logoPath).resize({ width: 300 }).toFile(resizedLogoPath);
+
+        console.log("Logo redimensionné, envoi à l'imprimante...");
+        printer.alignCenter();
+        await printer.printImage(resizedLogoPath);
+        printer.newLine();
+      } else {
+        console.error("Logo introuvable à cet emplacement:", logoPath);
+      }
+    } else {
+      console.warn("Aucun logo défini pour l'entreprise.");
+    }
+
+    printer.alignCenter();
+    printer.bold(false);
+    printer.println(company.name);
+    printer.println(company.email);
+    printer.drawLine();
+
+    // Print Header
+    printer.println("Recu");
+    printer.println("--------------");
+
+    // Print Order Details
+    printer.alignCenter();
+    printer.println(`Order ID: ${populatedClosedBill.order}`);
+    printer.println(`Cashier: ${populatedClosedBill.cashier.name}`);
+    printer.println("------------------------------------------------");
+
+    // Table Header
+    printer.alignLeft();
+    printer.bold(true);
+    printer.println(" Article            Qty        PU         Total");
+    printer.println("------------------------------------------------");
+    printer.bold(false);
+
+    // Print Items
+    printer.alignLeft();
+    populatedClosedBill.items.forEach((item) => {
+      printer.println(
+        ` ${item.product?.name}          x${item.quantity}       ${
+          item.price
+        }        ${item.price * item.quantity}FC`
+      );
+    });
+
+    // Print Total
+    printer.println();
+    printer.alignCenter();
+    printer.println("-----------------------------------------");
+    printer.alignCenter();
+    printer.println(
+      `Total Price:                     ${populatedClosedBill.totalPrice}FC`
+    );
+    printer.println(
+      `Amount Received:                 ${populatedClosedBill.amountReceived}FC`
+    );
+    printer.println("-----------------------------------------");
+    printer.println();
+    printer.alignCenter();
+    printer.println(`Change: ${populatedClosedBill.change} FC`);
+    printer.println("-------------------------");
+
+    // Open cash drawer
+    printer.raw(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]));
+
+    // Print Footer
+    printer.println("Merci pour votre achat !");
+    printer.cut(); // Cut the paper
+    printer.execute(); // Send to printer
+  } catch (error) {
+    console.error("Error printing receipt: ", error);
+  }
+};
+
+module.exports = { printOrder, printRemovedItems, printInvoice, printReceipt };
