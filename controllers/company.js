@@ -16,23 +16,49 @@ const addCompany = async (req, res, next) => {
       return next(new HttpError("The company already exists", 422));
     }
 
-    const newItems = await Company.create({
+    let logoPath = null;
+    if (req.files && req.files.logo) {
+      const logo = req.files.logo;
+      const fileExt = path.extname(logo.name);
+      const allowedExt = [".png"];
+
+      if (!allowedExt.includes(fileExt.toLowerCase())) {
+        return next(
+          new HttpError("Invalid file type. Only PNG are allowed", 400)
+        );
+      }
+
+      const fileName = uuid() + fileExt;
+      const uploadPath = path.join(__dirname, "../uploads/logos", fileName);
+
+      logo.mv(uploadPath, (err) => {
+        if (err) {
+          console.error(err);
+          return next(new HttpError("Failed to upload logo", 500));
+        }
+      });
+      logoPath = `/uploads/logos/${fileName}`;
+    }
+
+    const newCompany = await Company.create({
       name,
       address,
       phone,
       email,
+      logo: logoPath,
     });
 
     res.status(201).json({
-      message: "The campany was added",
-      user: {
-        id: newItems._id,
-        name: newItems.name,
-        email: newItems.email,
+      message: "The company was added",
+      company: {
+        id: newCompany._id,
+        name: newCompany.name,
+        email: newCompany.email,
+        logo: newCompany.logo,
       },
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return next(new HttpError("Failed to add the company", 500));
   }
 };

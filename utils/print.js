@@ -5,9 +5,20 @@ const HttpError = require("../models/error");
 const Order = require("../models/order");
 const Item = require("../models/item");
 const Store = require("../models/store");
-const Company = require("../models/category");
+const Company = require("../models/company");
+const fs = require("fs");
+const path = require("path");
+const sharp = require("sharp");
 
 const PRINTER_IP = "192.168.1.87"; // Adresse fixe de l'imprimante
+const generateInvoiceNumber = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const randomNumber = Math.floor(1000 + Math.random() * 9000); // Génère un nombre aléatoire à 4 chiffres
+  return `${year}${month}${day}-${randomNumber}`;
+};
 
 async function printItemsForStore(storeId, items, order, attendantName) {
   try {
@@ -158,7 +169,7 @@ async function printRemovedItems(order, attendantName) {
 
 const printInvoice = async (order) => {
   try {
-    const company = await Company.findOne(); // Fetch company details
+    const company = await Company.findOne();
     if (!company) {
       console.error("Aucune information sur l'entreprise trouvée.");
       return false;
@@ -166,30 +177,74 @@ const printInvoice = async (order) => {
 
     const printer = new ThermalPrinter({
       type: Types.EPSON,
-      interface: `tcp://${printerIP}:9100`, // Add your printer's IP
+      interface: `tcp://${PRINTER_IP}:9100`,
     });
 
-    // Print company logo (if available)
+    const invoiceNumber = generateInvoiceNumber();
+
+    // Print company logo (if available and exists)
     if (company.logo) {
-      printer.println(`Logo: ${company.logo}`);
+      const logoPath = path.join(
+        __dirname,
+        "../uploads/logos/",
+        path.basename(company.logo)
+      );
+      console.log("Chemin du logo:", logoPath);
+
+      if (fs.existsSync(logoPath)) {
+        console.log("Logo trouvé, redimensionnement...");
+
+        const resizedLogoPath = path.join(
+          __dirname,
+          "../uploads/logos/resized-logo.png"
+        );
+        await sharp(logoPath).resize({ width: 300 }).toFile(resizedLogoPath);
+
+        console.log("Logo redimensionné, envoi à l'imprimante...");
+        printer.alignCenter();
+        await printer.printImage(resizedLogoPath);
+        printer.newLine();
+      } else {
+        console.error("Logo introuvable à cet emplacement:", logoPath);
+      }
+    } else {
+      console.warn("Aucun logo défini pour l'entreprise.");
     }
 
-    // Print company information
     printer.alignCenter();
     printer.bold(true);
     printer.println(company.name);
-    printer.bold(false);
-    printer.println(company.address);
+    printer.println(company.email);
     printer.drawLine();
 
-    // Print order details (e.g., items, total price, etc.)
+    printer.alignCenter();
+    printer.bold(true);
+    printer.println(`Facture: ${invoiceNumber}`);
+    printer.drawLine();
+
+    // Table Header
     printer.alignLeft();
+    printer.bold(true);
+    printer.println(" Article         PU       Qty           Total");
+    printer.println("------------------------------------------------");
+    printer.bold(false);
+
+    // Table Body
     order.items.forEach((item) => {
-      printer.println(`${item.quantity}x ${item.product.name}`);
+      const name = item.product.name.padEnd(14);
+      const unitPrice = item.product.sellingPrice;
+      const quantity = item.quantity.toString().padStart(5);
+      const totalItemPrice = item.quantity * item.product.sellingPrice;
+
+      printer.println(
+        ` ${name}  ${unitPrice}  ${quantity}            ${totalItemPrice} `
+      );
     });
 
-    printer.drawLine();
-    printer.println(`Total: ${order.totalPrice} USD`);
+    printer.println("------------------------------------------------");
+    printer.bold(true);
+    printer.println(`Total: ${order.totalPrice}/.`);
+    printer.bold(false);
     printer.cut();
     await printer.execute();
 

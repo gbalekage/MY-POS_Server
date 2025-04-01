@@ -295,7 +295,7 @@ const facture = async (req, res, next) => {
     } else if (user.role === "manager") {
       printLimit = 2;
     } else if (user.role === "admin") {
-      printLimit = 4;
+      printLimit = 20;
     }
 
     if (user.billPrintCount >= printLimit) {
