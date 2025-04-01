@@ -350,4 +350,41 @@ const facture = async (req, res, next) => {
   }
 };
 
-module.exports = { createOrder, addItemToOrder, removeItemFromOrder, facture };
+const applyDiscount = async (req, res) => {
+  try {
+    const { discountPercentage } = req.body;
+    const { orderId } = req.params;
+
+    const validDiscounts = [5, 10, 20, 50, 75, 100];
+    if (!validDiscounts.includes(discountPercentage)) {
+      return res.status(400).json({ error: "Invalid discount percentage" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const discountAmount = (order.totalPrice * discountPercentage) / 100;
+
+    order.totalPrice -= discountAmount;
+
+    await order.save();
+
+    return res.status(200).json({
+      message: `Discount of ${discountPercentage}% applied successfully`,
+      updatedOrder: order,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+module.exports = {
+  createOrder,
+  addItemToOrder,
+  removeItemFromOrder,
+  facture,
+  applyDiscount,
+};
