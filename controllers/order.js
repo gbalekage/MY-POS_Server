@@ -69,10 +69,12 @@ const createOrder = async (req, res, next) => {
 
     await newOrder.save();
 
-    tableExists.order = newOrder._id;
-    tableExists.attendent = attendant;
-    tableExists.status = "occupe";
-    await tableExists.save();
+    if (tableExists) {
+      tableExists.order = newOrder._id;
+      tableExists.attendent = attendant;
+      tableExists.status = "occupe";
+      await tableExists.save();
+    }
 
     for (const item of formattedItems) {
       const product = await Item.findById(item.product);
@@ -91,6 +93,10 @@ const createOrder = async (req, res, next) => {
 
     const user = await User.findById(attendant);
     if (user) {
+      if (!Array.isArray(user.assignedTables)) {
+        user.assignedTables = [];
+      }
+
       if (!user.assignedTables.includes(table)) {
         user.assignedTables.push(table);
       }
@@ -259,11 +265,34 @@ const removeItemFromOrder = async (req, res, next) => {
       await printRemovedItems(order, attendantName);
     }
 
-    return res.status(200).json({
-      message: "Articles supprimés avec succès",
-      removedItems,
-      order,
-    });
+    if (order.items.length === 0) {
+      // Delete the order
+      await Order.findByIdAndDelete(orderId);
+
+      // Reset the table assignment
+      if (order.table) {
+        const table = await Table.findById(order.table);
+        if (table) {
+          table.order = null;
+          table.attendent = null;
+          table.status = "disponible";
+          await table.save();
+        }
+      }
+
+      // Reset the user assigned to the table
+      if (order.attendant) {
+        const user = await User.findById(order.attendant);
+        if (user) {
+          user.assignedTables = null;
+          await user.save();
+        }
+      }
+
+      return res.status(200).json({
+        message: "Commande supprimée car tous les articles ont été retirés",
+      });
+    }
   } catch (error) {
     console.error("Erreur lors de la suppression des articles:", error);
     return res.status(500).json({ message: "Erreur serveur", error });

@@ -125,9 +125,8 @@ async function printRemovedItemsForStore(storeId, removedItems, attendantName) {
 
     printer.alignCenter();
     printer.bold(true);
-    printer.println(
-      `🛒 ${store.name.toUpperCase()} STORE (ARTICLE RETIRES) 🛒`
-    );
+    printer.println(`ARTICLE RETIRES)`);
+    printer.drawLine();
 
     printer.alignLeft();
     removedItems.forEach((item) => {
@@ -237,7 +236,7 @@ const printInvoice = async (order) => {
       const totalItemPrice = item.quantity * item.product.sellingPrice;
 
       printer.println(
-        ` ${name}  ${unitPrice}  ${quantity}            ${totalItemPrice} `
+        ` ${name}  ${unitPrice}  ${quantity}           ${totalItemPrice} `
       );
     });
 
